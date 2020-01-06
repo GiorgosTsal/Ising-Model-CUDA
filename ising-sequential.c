@@ -1,128 +1,112 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "ising.h"
+#include <string.h>
 
-
-//! Ising model evolution
-/*!
+// Ising model evolution
+/*
   \param G      Spins on the square lattice             [n-by-n]
   \param w      Weight matrix                           [5-by-5]
   \param k      Number of iterations                    [scalar]
   \param n      Number of lattice points per dim        [scalar]
   NOTE: Both matrices G and w are stored in row-major format.
 */
-
-
-
-
-struct timeval startwtime, endwtime;
-double p_time;
-
 void ising(int *G, double *w, int k, int n)
 {
-	//! Array to store the updated values
-	int *G_new = malloc(n*n * sizeof(int));
+	// I use two arrays, read from one and write to the other, then swap the pointers for the next iteration
+	// Array to store local copy of G
+	int *g_tmp = malloc(n*n * sizeof(int));
 
-	//! Temp pointer to swap G and G_new
-	int *temp;
+	// Temporary pointer to swap G and g_tmp
+	int *swapg;
 
-	//! Variable to store the value of each moment
-	double sum_value = 0;
+	// Variable to store the value of each moment
+	double sum = 0;
 
-	//! The indices of the examined neighbors
+	// The indices of the examined neighbors
 	int idx_X, idx_Y;
 
-	//! Implement the process for k iterations
+	//Iterate k times
 	for(int i = 0; i < k; i++)
 	{
-		//! Access every single moment of the matrix
+		//loop through every moment of G
 		for(int x=0; x<n; x++)
 			for(int y=0; y<n; y++)
 			{
-				sum_value = 0;
+				sum = 0;
 
-				//! Iterate through the moment's neighbors (k->X, l->Y axis)
+				//  Iterate through the moment's neighbors (k->X, l->Y axis)
+				//	The neighborhood is a 5 × 5 window centered to each lattice point.
 				for(int k=0; k<5; k++)
 					for(int l=0; l<5; l++)
 					{
-						//! Only edit the neighbors of the examined element
+						// Only edit the neighbors of the examined element
 						if((k == 2) && (l == 2))
 							continue;
 
-						//! Find the index of the examined neigbor
-						//! If the element is at a special position (i.e. a corner)
-						//! continue to the other side of the matrix
+						// Find the index of the examined neighbor 
 						idx_X = (x + (k-2) + n) % n;
 						idx_Y = (y + (l-2) + n) % n;
 
-						//! Calculate the new value
-						sum_value += w[l*5 + k] * G[idx_Y*n + idx_X];
+						// Calculate the new value
+						sum += w[l*5 + k] * G[idx_Y*n + idx_X];
 					}
 
-				//! If positive -> 1
-				//! If negative -> -1
-				if(sum_value > 1e-3)
-					G_new[y * n + x] = 1;
-				else if(sum_value < -1e-3)
-					G_new[y * n + x] = -1;
+				// If positive set state to 1
+				// If negative set state to -1
+				// If zero dont make changes
+				if(sum > 0.001)
+					g_tmp[y * n + x] = 1;
+				else if(sum < -0.001)
+					g_tmp[y * n + x] = -1;
 				else
-					G_new[y * n + x] = G[y * n + x];
+					g_tmp[y * n + x] = G[y * n + x];
 			}
 
-		//! Swap pointers for next iteration
-		temp = G;
-		G = G_new;
-		G_new = temp;
+		// Swap pointers for next iteration
+		swapg = G;
+		G = g_tmp;
+		g_tmp = swapg;
 	}
 
-	//! At the last iteration, if the k is odd,
-	//! G points to G_new and G_new points to G
+	// At the last iteration, if the k is odd, G points to g_tmp and g_tmp points to G
 	if(k%2 != 0)
-		memcpy(G_new, G, n*n*sizeof(int));
+		memcpy(g_tmp, G, n*n*sizeof(int));
 }
 
 int main()
 {
-	//! Matrix dimensions (n) and number of iterations (k)
+	
 	int n = 517;
-	int k = 1;
+	int k =11;
 
-	//! Array that will keep the init binary file info
-	int *G = (int*)malloc(n*n * sizeof(int));
-
-	//! Weights
+	// weight matrix 𝑤 
     double weights[] = {0.004, 0.016, 0.026, 0.016, 0.004,
                 		0.016, 0.071, 0.117, 0.071, 0.016,
             			0.026, 0.117, 0    , 0.117, 0.026,
             			0.016, 0.071, 0.117, 0.071, 0.016,
             			0.004, 0.016, 0.026, 0.016, 0.004};
 
-	//! Open binary file and write contents to G array
+	// Open the binary file and write contents to G array
     FILE *fptr = fopen("conf/conf-init.bin","rb");
     if (fptr == NULL)
 	{
         printf("Error opening file");
         exit(1);
     }
+	// Array that will keep the init binary file info
+	int *G = (int*)malloc(n*n * sizeof(int));
     fread(G, sizeof(int), n*n, fptr);
 	fclose(fptr);
 
-	//! ========= START POINT =========
-    gettimeofday (&startwtime, NULL);
 
-    //! Implement ising procedure
+    // run ising procedure
     ising(G, weights, k, n);
 
-	//! ========= END POINT =========
-    gettimeofday (&endwtime, NULL);
-    p_time = (double)((endwtime.tv_usec - startwtime.tv_usec)/1.0e6
-  		      + endwtime.tv_sec - startwtime.tv_sec);
-
-	//! Name of conf file depending on k value
+	// name of conf file depending on k value(1,4,11)
 	char filename[25];
 	snprintf(filename, sizeof(filename), "conf/conf-%d.bin", k);
 
-	//! Compare updated data with the correct data (for k = 1, 4, 11)
+	// Compare returned data with the correct data 
 	int *data = (int*)malloc(n*n * sizeof(int));
 	int isWrong = 0;
 
@@ -133,15 +117,13 @@ int main()
 		if(data[v] != G[v])
 			isWrong = 1;
 
-	//! Check if any comparison failed
+
 	if (!isWrong)
-		printf("[k=%d]" GREEN " CORRECT\n" RESET_COLOR, k);
+		printf("[k=%d] CORRECT\n", k);
 	else
-		printf("[k=%d]" RED " WRONG\n" RESET_COLOR, k);
+		printf("[k=%d] WRONG\n", k);
 
-	printf(RED "Real Time: %f\n", p_time);
-
-	//! Free allocated GPU memory
+	// Free memory
     free(G);
 	free(data);
 
