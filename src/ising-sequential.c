@@ -1,10 +1,11 @@
+
 /*
-*       V0. Sequential 27/12/2019
-*       Author:Tsalidis Georgios
+*       V0. Sequential: Simulation of an Ising model in two dimensions of size nxn for k iterations, staring from a uniform random initial state
+*       Author:Tsalidis Georgios 27/12/2019
 *       gtsalidis@ece.auth.gr
 */
 
-#include <iostream>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -19,54 +20,47 @@
 */
 void ising(int *G, double *w, int k, int n)
 {
-	// Use two arrays, read from one and write to the other, then swap the pointers for the next iteration
-  int *g_tmp = new int[n*n];
+  int *g_tmp = new int[n*n]; //read from one
 
 	// swap G and g_tmp pointeers for both matrixes
 	int *swapg;
 
 	// Variable to store the value of each moment
-	double total = 0;
-
-	// The indices of the checked neighbors
+	double influence = 0;
+ 
+  // Indexes of neibghors checked
 	int idx_X, idx_Y;
 
 	//Iterate k times
 	for(int i = 0; i < k; i++)
 	{
-		//scan the lattice-loop through G
+		//loop through G
 		for(int x=0; x<n; x++)
 			for(int y=0; y<n; y++)
 			{
-				total = 0;
+				influence = 0;
 
-				//  Iterate through the moments neighbors (k->X, l->Y axis) to compute the next sping
-				//	The neighborhood is a 5 × 5 window centered to each lattice point.
-				for(int k=0; k<5; k++)
-					for(int l=0; l<5; l++)
+				// loop through the moment neighbors
+				for(int X=0; X<5; X++)
+					for(int Y=0; Y<5; Y++)
 					{
-						// Only edit the neighbors of the examined element
-						if((k == 2) && (l == 2))
-							continue;
+						// find idx of checked point
+						idx_X = (x + (X-2) + n) % n;
+						idx_Y = (y + (Y-2) + n) % n;
 
-						// Find the index of the examined neighbor with modulus
-						idx_X = (x + (k-2) + n) % n;
-						idx_Y = (y + (l-2) + n) % n;
-
-						// Calculate the new influence value
-						total += w[l*5 + k] * G[idx_Y*n + idx_X];
+						influence += *(w + Y*5 + X) * *(G +idx_Y*n + idx_X);
 					}
 
-				// If positive set state to 1
-				// If negative set state to -1
-				// If zero dont make changes
-				if(total > 0.001)
-					g_tmp[y * n + x] = 1;
-				else if(total < -0.001)
-					g_tmp[y * n + x] = -1;
+		    //the value of the sign of influence If positive -> 1,If negative -> -1
+				if(influence > 0.001)
+					*(g_tmp + y*n + x) = 1;
+				else if(influence < -0.001)
+					*(g_tmp + y*n + x) = -1;
 				else
-					g_tmp[y * n + x] = G[y * n + x];
-			}
+         //remains the same
+					*(g_tmp + y*n + x) = *(G + y*n + x);
+
+  }
 
 		// Swap pointers for next iteration
 		swapg = G;
@@ -74,9 +68,10 @@ void ising(int *G, double *w, int k, int n)
 		g_tmp = swapg;
 	}
 
-  // Handle situation if k is odd at the last iteration
+  // Handle situation for odd 
 	if(k%2 != 0)
 		memcpy(g_tmp, G, n*n*sizeof(int));
+ 
 }
 
 bool evaluate(int *G1,int *G2, int n ){
@@ -90,9 +85,9 @@ bool evaluate(int *G1,int *G2, int n ){
 
 
 int main() {
-    
+  
     int n = 517;
-    int k = 11;
+    //int k = 11;
 
     // weight matrix 𝑤 
     double weights[] = {0.004, 0.016, 0.026, 0.016, 0.004,
