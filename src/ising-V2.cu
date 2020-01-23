@@ -1,7 +1,7 @@
 
 /*
-*       V1. GPU with one thread per moment 
-*       Author:Tsalidis Georgios 2/1/2020
+*       V2. GPU with one thread computing a block of moments
+*       Author:Tsalidis Georgios 5/1/2020
 *       gtsalidis@ece.auth.gr
 */
 
@@ -11,6 +11,10 @@
 #include <string.h>
 
 #define BLOCK_SIZE 16 // value usually chosen by tuning and hardware constraints
+
+#define GRID_DIM_X 4
+#define GRID_DIM_Y 4
+
 
 #define CUDA_CHECK_ERROR() __cuda_check_errors(__FILE__, __LINE__)
 
@@ -32,7 +36,7 @@ __global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int* c, i
 bool evaluate(int *G1,int *G2, int n);
 
 
-//kernel function used to calculate one moment per thread
+//kernel function used to calculate one thread with a block of moments
 __global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int* c, int n)
 {
 	//calculate thread_id
@@ -42,14 +46,19 @@ __global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int* c, i
 	double influence;
 
 	// moments x,y coordinates
-	int y = thread_id%n;
-	int x = thread_id/n;
-	
+	int x, y;
+	 
 	// Indexes of neibghors checked
 	int idx_x, idx_y;
+	int next_thr = gridDim.x*blockDim.x;
 
-	if( thread_id < n*n )
+	//each thread to compute a block of moments
+	for(int thread = thread_id; thread<n*n; thread+= next_thr)
 	{
+		// moments x,y coordinates
+		y = thread%n;
+		x = thread/n;
+		influence = 0;
 		// loop through the moment neighbors
 	    for(int X=0; X<5; X++)
 	        for(int Y=0; Y<5; Y++)
@@ -101,8 +110,8 @@ void ising(int *G, double *w, int k, int n)
 	// gpu_G with gpu_Gtmp pointer swap
 	int *temp;
 
-	int threads = BLOCK_SIZE;
-	int blocks = (n*n + threads - 1)/threads;
+	dim3 dimBlock(BLOCK_SIZE,BLOCK_SIZE);
+	dim3 dimGrid(GRID_DIM_X,GRID_DIM_Y);
 
 	//vars to store changes 
 	int c;
@@ -118,9 +127,8 @@ void ising(int *G, double *w, int k, int n)
 		cudaMemcpy(gpu_c, &c, (size_t)sizeof(int), cudaMemcpyHostToDevice);
 		
 		//run kernel function to device
-		ising_kernel<<< blocks , threads >>>(gpu_w, gpu_G, gpu_Gtmp, gpu_c, n);
+		ising_kernel<<< dimGrid , dimBlock >>>(gpu_w, gpu_G, gpu_Gtmp, gpu_c, n);
 		CUDA_CHECK_ERROR ();
-
 		//Synchronize 
 		cudaDeviceSynchronize();
 
