@@ -31,9 +31,12 @@ void ising(int *G, double *w, int k, int n)
   // Indexes of neibghors checked
 	int idx_X, idx_Y;
 
+	//flag to Terminate if no changesare made
+	bool flag;
 	//Iterate k times
 	for(int i = 0; i < k; i++)
 	{
+		flag = false;
 		//loop through G
 		for(int x=0; x<n; x++)
 			for(int y=0; y<n; y++)
@@ -52,20 +55,33 @@ void ising(int *G, double *w, int k, int n)
 					}
 
 		    //the value of the sign of influence If positive -> 1,If negative -> -1
-				if(influence > 0.001)
+				if(influence > 0.001){
 					*(g_tmp + y*n + x) = 1;
-				else if(influence < -0.001)
+					flag = true;
+				}
+				else if(influence < -0.001){
 					*(g_tmp + y*n + x) = -1;
+					flag = true;
+				}
 				else
-         //remains the same
+       				  //remains the same
 					*(g_tmp + y*n + x) = *(G + y*n + x);
+				
 
-  }
-
+		 }
 		// Swap pointers for next iteration
 		swapg = G;
 		G = g_tmp;
 		g_tmp = swapg;
+
+		// Terminate model evolution if no changes were made
+		if(!flag)
+		{
+			k = i+1;
+			break;
+		}
+
+	
 	}
 
   // Handle situation for odd 

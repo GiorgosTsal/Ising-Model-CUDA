@@ -10,7 +10,7 @@
 #include <string.h>
 #include "../inc/ising.h"
 
-#define BLOCK_SIZE 128 // value usually chosen by tuning and hardware constraints
+#define BLOCK_SIZE 512 // value usually chosen by tuning and hardware constraints
 #define CUDA_CHECK_ERROR() __cuda_check_errors(__FILE__, __LINE__)
 
 // See: http://codeyarns.com/2011/03/02/how-to-do-error-checking-in-cuda/
@@ -27,12 +27,12 @@ __cuda_check_errors (const char *filename, const int line_number)
 }
 
 
-__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n);
+__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n, bool *flag);
 bool evaluate(int *G1,int *G2, int n);
 
 
 //kernel function used to calculate one thread with a block of moments
-__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n)
+__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n, bool *flag)
 {
 	//calculate thread_id
 	int thread_id = blockIdx.x*blockDim.x + threadIdx.x;
@@ -73,10 +73,12 @@ __global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n)
 		if(influence > 0.0001)
 		{
 			*(gpu_Gtmp + x*n + y) = 1;
+			*flag = true;
 		}
 		else if(influence < -0.0001)
 		{
 			*(gpu_Gtmp + x*n + y) = -1;
+			*flag = true;
 		}
 	    else
 			//remains the same
@@ -107,16 +109,23 @@ void ising(int *G, double *w, int k, int n)
 	// gpu_G with gpu_Gtmp pointer swap
 	int *temp;
 
-	//dim3 dimBlock(BLOCK_SIZE,BLOCK_SIZE);
-	//dim3 dimGrid(GRID_DIM_X,GRID_DIM_Y);
 	int block = BLOCK_SIZE;
 	int grid = (n + block -1)/block;
+
+	//flags for termination of no changes made
+	bool flag;
+	bool *gpu_flag;
+	cudaMalloc(&gpu_flag, (size_t)sizeof(bool));
 
 	//run for k iterations
 	for(int i = 0; i < k; i++)
 	{
+		
+		flag = false;
+		cudaMemcpy(gpu_flag, &flag, (size_t)sizeof(bool), cudaMemcpyHostToDevice);
+
 		//run kernel function to device
-		ising_kernel<<< grid , block >>>(gpu_w, gpu_G, gpu_Gtmp, n);
+		ising_kernel<<< grid , block >>>(gpu_w, gpu_G, gpu_Gtmp, n, gpu_flag);
 		
 		//check for device errors
 		CUDA_CHECK_ERROR ();
@@ -128,6 +137,13 @@ void ising(int *G, double *w, int k, int n)
 		temp = gpu_G;
 		gpu_G = gpu_Gtmp;
 		gpu_Gtmp = temp;
+
+		// Terminate model evolution if no changes were made
+		cudaMemcpy(gpu_flag, &flag, (size_t)sizeof(bool), cudaMemcpyHostToDevice);
+		if(flag)
+		{
+			break;
+		}
 	}
 
 	cudaMemcpy(G, gpu_G, n*n*sizeof(int), cudaMemcpyDeviceToHost);

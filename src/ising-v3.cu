@@ -33,12 +33,12 @@ __cuda_check_errors (const char *filename, const int line_number)
 }
 
 
-__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n);
+__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n, bool *flag);
 bool evaluate(int *G1,int *G2, int n);
 
 
 //kernel function used to calculate one thread with a block of moments
-__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n)
+__global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n, bool *flag)
 {
     int s_ncols = blockDim.x + 2*LEN;//num of  rows
  
@@ -150,10 +150,12 @@ __global__ void ising_kernel(double* gpu_w, int* gpu_G, int* gpu_Gtmp, int n)
                 if(influence > 0.0001)
                 {
                     *(gpu_Gtmp + i*n + j) = 1;
+					*flag = true;
                 }
                 else if(influence < -0.0001)
                 {
                     *(gpu_Gtmp + i*n + j) = -1;
+					*flag = true;
                 }
                 else
                     //remains the same
@@ -192,12 +194,19 @@ void ising(int *G, double *w, int k, int n)
     dim3 block(BLOCK_X,BLOCK_Y); // blockDim
     dim3 grid(GRID_X,GRID_Y); // gridDim
 
+	//flags for termination of no changes made
+	bool flag;
+	bool *gpu_flag;
+	cudaMalloc(&gpu_flag, (size_t)sizeof(bool));
+
 	//run for k iterations
 	for(int i = 0; i < k; i++)
 	{
+		flag = false;
+		cudaMemcpy(gpu_flag, &flag, (size_t)sizeof(bool), cudaMemcpyHostToDevice);
 
 		//run kernel function to device
-		ising_kernel<<< grid , block >>>(gpu_w, gpu_G, gpu_Gtmp, n);
+		ising_kernel<<< grid , block >>>(gpu_w, gpu_G, gpu_Gtmp, n, gpu_flag);
   
 		//check for device errors
 		CUDA_CHECK_ERROR ();
@@ -209,6 +218,13 @@ void ising(int *G, double *w, int k, int n)
 		temp = gpu_G;
 		gpu_G = gpu_Gtmp;
 		gpu_Gtmp = temp;
+		
+		// Terminate model evolution if no changes were made
+		cudaMemcpy(gpu_flag, &flag, (size_t)sizeof(bool), cudaMemcpyHostToDevice);
+		if(flag)
+		{
+			break;
+		}
 	}
 
 	cudaMemcpy(G, gpu_G, n*n*sizeof(int), cudaMemcpyDeviceToHost);
