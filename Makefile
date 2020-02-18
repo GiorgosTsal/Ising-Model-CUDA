@@ -21,3 +21,12 @@ v2:
 	$(NVCC) src/ising-v2.cu validation/main_validate_cuda.cu -o validate_v2.o && ./validate_v2.o
 v3:
 	$(NVCC) src/ising-v3.cu validation/main_validate_cuda.cu -o validate_v3.o && ./validate_v3.o
+
+benchmark_v0:
+	$(CC) src/ising-sequential.c benchmarks/benchmark_v0.c -o benchmark_v0.o  && ./benchmark_v0.o
+benchmark_v1:
+	$(NVCC) src/ising-v1.cu benchmarks/benchmark_v1.cu -o benchmark_v1.o  && ./benchmark_v1.o
+benchmark_v2:
+	$(NVCC) src/ising-v2.cu benchmarks/benchmark_v2.cu -o benchmark_v2.o  && ./benchmark_v2.o
+benchmark_v3:
+	$(NVCC) src/ising-v3.cu benchmarks/benchmark_v3.cu -o benchmark_v3.o  && ./benchmark_v3.o
