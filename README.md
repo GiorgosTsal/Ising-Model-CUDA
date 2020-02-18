@@ -14,8 +14,33 @@ To validate a specific version(e.g. "V1") run:
 ```sh
 make V1
 ```
+## Cleaning
 
 For cleaning:
 ```sh
 make clean
+```
+
+## Benchmarking
+
+To benchmark v0 run:
+
+```sh
+make benchmark_v0
+```
+
+To benchmark v1 run:
+
+```sh
+make benchmark_v1
+```
+To benchmark v2 run:
+
+```sh
+make benchmark_v2
+```
+To benchmark v3 run:
+
+```sh
+make benchmark_v3
 ```
